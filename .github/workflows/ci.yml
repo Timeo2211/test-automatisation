@@ -55,10 +55,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - uses: browser-actions/setup-chrome@v1
-        with:
-          install-chromedriver: true
       - run: pip install -r requirements.txt
+      - name: Versions navigateur
+        run: |
+          google-chrome --version || true
+          chromedriver --version || echo "pas de chromedriver sur le PATH (Selenium Manager le telechargera)"
       - name: Tests E2E (serveur + pytest)
         run: |
           python -m app.server &
