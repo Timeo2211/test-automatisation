@@ -11,3 +11,7 @@ assets/
 
 # Config locale Claude Code
 .claude/
+htmlcov/
+.coverage
+.coverage.*
+report*.html
