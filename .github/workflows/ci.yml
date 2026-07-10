@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  BASE_URL: http://localhost:8000
+  SERVICE_EMAIL: eleve.test@codeunmax.fr
+  SERVICE_PASSWORD: Test1234!
+  FAKER_SEED: "12345"
+  HEADLESS: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "exercice 3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check .
+
+  unit_tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "exercice 3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: pytest -m unit --html=rapport-tests-unit.html --self-contained-html
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-tests-unit
+          path: "exercice 3/rapport-tests-unit.html"
+
+  e2e_tests:
+    runs-on: ubuntu-latest
+    needs: unit_tests
+    defaults:
+      run:
+        working-directory: "exercice 3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: browser-actions/setup-chrome@v1
+        with:
+          install-chromedriver: true
+      - run: pip install -r requirements.txt
+      - name: Demarrer la plateforme
+        run: |
+          python -m app.server &
+          for i in $(seq 1 30); do
+            curl -sf "$BASE_URL/login" && break
+            sleep 1
+          done
+      - run: pytest -m e2e --html=rapport-tests-e2e.html --self-contained-html
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-tests
+          path: "exercice 3/rapport-tests-e2e.html"

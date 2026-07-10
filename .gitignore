@@ -1,0 +1,13 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+rapport-tests*.html
+report.html
+assets/
+.DS_Store
+
+# Config locale Claude Code
+.claude/
