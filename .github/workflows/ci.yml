@@ -59,14 +59,16 @@ jobs:
         with:
           install-chromedriver: true
       - run: pip install -r requirements.txt
-      - name: Demarrer la plateforme
+      - name: Tests E2E (serveur + pytest)
         run: |
           python -m app.server &
-          for i in $(seq 1 30); do
-            curl -sf "$BASE_URL/login" && break
-            sleep 1
-          done
-      - run: pytest -m e2e --html=rapport-tests-e2e.html --self-contained-html
+          SERVER_PID=$!
+          for i in $(seq 1 30); do curl -sf "$BASE_URL/login" && break; sleep 1; done
+          curl -sf "$BASE_URL/login" > /dev/null || { echo "Le serveur n'a pas demarre"; exit 1; }
+          pytest -m e2e --html=rapport-tests-e2e.html --self-contained-html
+          RESULT=$?
+          kill $SERVER_PID 2>/dev/null || true
+          exit $RESULT
       - if: always()
         uses: actions/upload-artifact@v4
         with:
