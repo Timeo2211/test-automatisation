@@ -1,2 +1,6 @@
 def prix_inscription(nb_cours: int) -> float:
-    raise NotImplementedError("prix_inscription n'est pas encore implementee")
+    prix_unitaire = 40
+    total = nb_cours * prix_unitaire
+    if nb_cours >= 3:
+        total = round(total * 0.85, 2)
+    return float(total)
