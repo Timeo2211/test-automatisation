@@ -1,67 +1,116 @@
-# TEST-6 à TEST-8 — Données dynamiques, mocking & CI (Code un max)
+# Code un max — Suite de tests automatisés (livrable MSPR)
 
-Suite de tests rendue indépendante des données (Faker) et des services externes
-(mock du paiement), avec gestion des environnements local/CI et un pipeline
-GitHub Actions publiant un rapport en artifact.
+Suite de tests complète de la plateforme de cours **Code un max** :
+tests unitaires (TDD), E2E en Page Object Model **cross-browser** (Chrome/Firefox),
+données dynamiques (Faker), mocking du paiement (responses), exécution
+**parallèle** (pytest-xdist), **reporting HTML** et **couverture** (pytest-cov),
+le tout intégré à un pipeline **GitHub Actions**.
 
-## Arborescence
+## Prérequis
 
-```
-pages/                   Page Objects (POM)
-tests/
-  test_login.py          login valide + login refusé (paramétré)
-  test_catalogue.py      navigation catalogue
-  test_inscription.py    inscription E2E avec apprenant généré par Faker
-  test_deconnexion.py    déconnexion
-  test_paiement.py       paiement mocké (accepté 200 / refusé 402) — marker unit
-conftest.py              fixtures : config, driver, session_connectee, apprenant (Faker)
-pytest.ini               markers unit / e2e
-ruff.toml                config du lint
-.env.example             variables attendues (copier en .env en local)
-.github/workflows/ci.yml pipeline 3 jobs : lint / unit_tests / e2e_tests
-app/                     plateforme de démo (Flask)
-```
+- Python **3.11+**
+- **Google Chrome** et/ou **Mozilla Firefox** installés
+- Git
 
-## Configuration (local)
+> Les drivers (chromedriver / geckodriver) sont résolus automatiquement par
+> **Selenium Manager** (intégré à Selenium 4). Rien à installer à la main.
+
+## Cloner
 
 ```bash
-cp .env.example .env      # puis adapter si besoin
-python -m venv venv && source venv/bin/activate
+git clone https://github.com/Timeo2211/test-automatisation.git
+cd test-automatisation/exercice4
+```
+
+## Installer
+
+```bash
+python -m venv venv
+source venv/bin/activate            # Windows : venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Variables (`.env` en local, variables du workflow en CI) :
-
-| Variable          | Défaut                    | Rôle                                  |
-|-------------------|---------------------------|---------------------------------------|
-| `BASE_URL`        | `http://localhost:8000`   | URL de la plateforme                  |
-| `SERVICE_EMAIL`   | `eleve.test@codeunmax.fr` | Compte de service (login mutualisé)   |
-| `SERVICE_PASSWORD`| `Test1234!`               | Mot de passe du compte de service     |
-| `FAKER_SEED`      | `12345`                   | Seed Faker (données reproductibles)   |
-| `HEADLESS`        | `1`                       | `0` pour voir le navigateur (debug)   |
-
-## Lancer les tests
+## Lancer l'application (dans un terminal dédié)
 
 ```bash
-# Serveur dans un terminal (si port 8000 occupé : PORT=8010 + BASE_URL=...)
-python -m app.server
-
-# Tests dans un autre terminal
-pytest                 # toute la suite (11 tests)
-pytest -m unit         # tests rapides mockés, sans serveur ni navigateur
-pytest -m e2e          # tests end-to-end (serveur requis)
+python -m app.server                # http://localhost:8000
 ```
 
-Rapport HTML : `pytest --html=rapport-tests.html --self-contained-html`.
+> Si le port 8000 est occupé : `PORT=8010 python -m app.server`, puis passer
+> `BASE_URL=http://localhost:8010` aux commandes de test ci-dessous.
+
+## Lancer les tests (autre terminal)
+
+```bash
+source venv/bin/activate
+
+# Toute la suite, en parallèle, avec rapport HTML + couverture (une commande)
+pytest -n auto \
+  --cov=app --cov-report=html --cov-report=term-missing \
+  --html=report.html --self-contained-html
+
+# Sous-ensembles utiles
+pytest -m unit                      # tests rapides (sans navigateur ni réseau)
+pytest -m e2e                       # tests end-to-end
+pytest -p no:randomly               # ordre fixe (débogage)
+```
+
+### Choix des navigateurs
+
+Les tests E2E tournent sur Chrome **et** Firefox par défaut. Pour restreindre :
+
+```bash
+BROWSERS=chrome pytest -m e2e       # Chrome uniquement
+BROWSERS=firefox pytest -m e2e      # Firefox uniquement
+```
+
+Chaque scénario E2E apparaît une fois par navigateur (ex. `...[chrome]`, `...[firefox]`).
+
+## Lire le rapport
+
+- **`report.html`** — rapport pytest auto-contenu (à ouvrir dans un navigateur).
+- **`htmlcov/index.html`** — rapport de couverture détaillé, ligne par ligne.
+
+En CI, ces deux rapports sont publiés en **artefacts** téléchargeables
+(`report-html`, `couverture-html`) sur chaque exécution de l'onglet **Actions**.
+
+## Configuration (variables d'environnement)
+
+| Variable          | Défaut                    | Rôle                                   |
+|-------------------|---------------------------|----------------------------------------|
+| `BASE_URL`        | `http://localhost:8000`   | URL de la plateforme testée            |
+| `BROWSERS`        | `chrome,firefox`          | Navigateurs E2E (séparés par virgule)  |
+| `HEADLESS`        | `1`                       | `0` pour voir le navigateur (debug)    |
+| `SERVICE_EMAIL`   | `eleve.test@codeunmax.fr` | Compte de service (login mutualisé)    |
+| `SERVICE_PASSWORD`| `Test1234!`               | Mot de passe du compte de service      |
+| `FAKER_SEED`      | `12345`                   | Seed Faker (données reproductibles)    |
+
+Copier `.env.example` en `.env` pour fixer ces valeurs en local. En CI, elles
+sont fournies par le workflow.
+
+## Choix techniques
+
+- **TDD** : la règle de tarification (remise de 15 % dès le 3ᵉ cours,
+  `app/tarification.py`) a été développée en Red → Green → Refactor — voir
+  l'historique Git (`test(tarification): RED …` puis `feat(tarification): GREEN …`).
+- **Parallélisation** : `pytest -n auto` ; les tests sont isolés (driver neuf par
+  test, apprenants Faker uniques via UUID, paiement mocké). La suite passe en
+  séquentiel **et** en parallèle.
+- **Stabilité** : les attentes sont **explicites** (`WebDriverWait` dans
+  `BasePage`), aucune temporisation fixe. `pytest-rerunfailures` n'est activé que
+  sur `test_inscription` (parcours multi-pages), comme filet de sécurité documenté
+  — la stabilité vient d'abord des attentes explicites.
+- **Couverture** : mesurée avec `pytest-cov` (compatible xdist). `app/server.py`
+  est exercé de bout en bout par les E2E mais, tournant dans un **process séparé**,
+  n'est pas instrumenté par pytest-cov ; la couverture porte donc sur le code
+  logique (validation, tarification, inscription), **> 90 %**.
 
 ## Pipeline CI
 
-`.github/workflows/ci.yml` s'exécute sur `push` et `pull_request` avec 3 jobs :
+`.github/workflows/ci.yml` (racine du dépôt) — déclenché sur `push`,
+`pull_request` et manuellement (**Run workflow**) :
 
 - **lint** : `ruff check .`
-- **unit_tests** : `pytest -m unit` (rapide, sans navigateur)
-- **e2e_tests** : `pytest -m e2e` (installe Chrome, démarre le serveur) — dépend de
-  `unit_tests` via `needs:`
-
-Chaque job de tests génère un rapport HTML publié en artifact
-(`actions/upload-artifact`, `if: always()` pour le récupérer même en cas d'échec).
+- **unit_tests** : tests rapides mockés (sans navigateur)
+- **full_suite** : suite complète (unit + E2E **Chrome & Firefox**) en `-n auto`,
+  publie `report.html` et la couverture HTML en artefacts.

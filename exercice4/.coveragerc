@@ -1,0 +1,7 @@
+[run]
+source = app
+omit =
+    app/server.py
+
+[report]
+show_missing = True

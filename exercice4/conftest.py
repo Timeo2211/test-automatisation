@@ -1,11 +1,14 @@
 import os
+import time
 import uuid
 
 import pytest
 from dotenv import load_dotenv
 from faker import Faker
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
 from app.inscription import supprimer_compte
 from pages.login_page import LoginPage
@@ -18,6 +21,41 @@ COMPTE_VALIDE = {
 }
 
 FAKER_SEED = int(os.getenv("FAKER_SEED", "12345"))
+
+NAVIGATEURS = [n.strip() for n in os.getenv("BROWSERS", "chrome,firefox").split(",") if n.strip()]
+HEADLESS = os.getenv("HEADLESS", "1") != "0"
+
+
+def _instancier(navigateur):
+    if navigateur == "firefox":
+        options = FirefoxOptions()
+        if HEADLESS:
+            options.add_argument("-headless")
+        options.add_argument("--width=1280")
+        options.add_argument("--height=900")
+        return webdriver.Firefox(options=options)
+
+    options = ChromeOptions()
+    if HEADLESS:
+        options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1280,900")
+    return webdriver.Chrome(options=options)
+
+
+def _construire_driver(navigateur):
+    # Selenium Manager peut etre tue par macOS (Gatekeeper) a son tout premier
+    # lancement : on retente avec un court delai, le temps que l'OS valide le
+    # binaire. Sans effet en CI Linux (driver preinstalle).
+    derniere_erreur = None
+    for _ in range(4):
+        try:
+            return _instancier(navigateur)
+        except WebDriverException as erreur:
+            derniere_erreur = erreur
+            time.sleep(3)
+    raise derniere_erreur
 
 
 @pytest.fixture(scope="session")
@@ -33,16 +71,9 @@ def base_url(config):
     return config["base_url"]
 
 
-@pytest.fixture
-def driver():
-    options = Options()
-    if os.getenv("HEADLESS", "1") != "0":
-        options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1280,900")
-
-    navigateur = webdriver.Chrome(options=options)
+@pytest.fixture(params=NAVIGATEURS)
+def driver(request):
+    navigateur = _construire_driver(request.param)
     yield navigateur
     navigateur.quit()
 
